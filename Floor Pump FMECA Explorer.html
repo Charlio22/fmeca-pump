@@ -76,7 +76,7 @@ ul.clean{padding-left:18px;margin:6px 0 10px} ul.clean li{margin-bottom:6px}
 .hot:hover .part{stroke:var(--accent)}
 .dim .hot:not(.active){opacity:.25}
 .hot.active .part{stroke:var(--accent)}
-.badge circle{fill:var(--crit)} .badge text{fill:#fff;font-family:var(--mono);font-size:16px;font-weight:600}
+.badge rect{fill:var(--crit)} .badge text{fill:#fff;font-family:var(--mono);font-size:15px;font-weight:600}
 .grid{stroke:var(--soft);stroke-width:1}
 .ax{font-family:var(--mono);font-size:16px;fill:var(--muted)}
 .ttl{font-family:var(--display);font-size:40px;font-weight:700;fill:var(--ink)}
@@ -143,11 +143,10 @@ const labs=[[1,"1 Valve head",640,780],[2,"2 Gauge",250,1010],[3,"3 Pumping unit
 const L2=el("g",{id:"labels"},pump);
 labs.forEach(([id,t,x,y])=>el("text",{class:"lbl",x,y,"data-sub":id},L2,t));
 // priority badges per subsystem
-const pos={1:[690,610],2:[300,1050],3:[440,320],4:[880,1000],5:[290,170],6:[240,1240]};
+const pos={1:[640,600],2:[260,1050],3:[330,700],4:[880,1000],5:[500,112],6:[240,1240]};
 DATA.subs.forEach(s=>{const n=DATA.causes.filter(c=>c.prio&&c.main===s.id).length; if(!n)return;
-  const b=el("g",{class:"badge",transform:`translate(${pos[s.id][0]},${pos[s.id][1]})`},pump); el("circle",{r:17},b); el("text",{"text-anchor":"middle",y:6},b,n);});
-el("text",{class:"ttl",x:120,y:80},W,"SKS Air-X-Press 8.0");
-el("text",{class:"ax",x:120,y:112},W,"red badge = priority causes of each subsystem (counted once, by main component; total = 10)");
+  const b=el("g",{class:"badge",transform:`translate(${pos[s.id][0]},${pos[s.id][1]})`},pump); el("rect",{x:-58,y:-16,width:116,height:32,rx:16},b); el("text",{"text-anchor":"middle",y:6},b,n+" priority");});
+
 
 // ---------- Pareto (world area x 1150-2800, y 60-660) ----------
 const P=el("g",{id:"pareto"});
@@ -208,7 +207,7 @@ function render(i){const st=STOPS[i]; let h="";
     <p>Click a part of the pump, or use Next, to zoom into each subsystem and its failure causes. The last three stops show the Pareto chart, the risk matrix and the effect of the corrective actions.</p>
     <div class="kpis"><div class="kpi"><b>6</b><span>failure modes</span></div><div class="kpi"><b>15</b><span>failure causes</span></div><div class="kpi"><b>${DATA.tot.toLocaleString("en")}</b><span>total RPN</span></div>
     <div class="kpi"><b>${DATA.prio.length}</b><span>priority causes (80% of RPN)</span></div><div class="kpi"><b>${red}</b><span>not acceptable in the matrix</span></div><div class="kpi"><b>−${Math.round((1-DATA.after/DATA.before)*100)}%</b><span>RPN after actions</span></div></div>
-    <div class="hint">RPN = S × O × D, each on a 1–10 scale (SEMATECH and course tables). Red badges on the drawing count the priority causes in each subsystem.</div>`;}
+    <div class="hint">RPN = S × O × D, each on a 1–10 scale (SEMATECH and course tables). On the drawing, the dark label (e.g. <b>5 Handle</b>) is the subsystem number of the tree in Figure 5.1; the red tag (e.g. <b style="color:var(--crit)">1 priority</b>) counts the priority causes of that subsystem, each cause counted once by its main component (6 + 2 + 1 + 1 = 10).</div>`;}
   else if(st.k==="sub"){const s=st.s; const cs=DATA.causes.filter(c=>c.subs.includes(s.id)).sort((a,b)=>b.rpn-a.rpn);
     h=`<div class="eyebrow">Subsystem ${s.id} of 6</div><h2>${s.name}</h2><p>${s.fn}</p><div class="meta">Related TCs (Day 3): ${s.tc} · ${cs.length} failure cause${cs.length>1?"s":""}</div>${cs.map(card).join("")}`;}
   else if(st.k==="pareto"){const top=DATA.order.slice(0,4).map(id=>byId[id]);
