@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Floor Pump FMECA Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a technical-drawing canvas (the pump and the charts live on one large sheet) with a camera that zooms between stops, plus a reading panel on the right. */
+:root{
+  --paper:#EEF2F7; --sheet:#F8FAFC; --ink:#1F3864; --line:#8C9BB5; --muted:#56627A;
+  --accent:#2F6FD6; --crit:#C8442E; --warn:#D9A21B; --ok:#3E8E5E; --panel:#FFFFFF; --soft:#E3E9F2;
+  --display:"Barlow Condensed", "Arial Narrow", sans-serif; --body:"Barlow", "Segoe UI", sans-serif; --mono:"IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0E1422; --sheet:#131B2C; --ink:#D3DDF2; --line:#5E6E8C; --muted:#9AA7C0;
+  --accent:#6FA0F2; --crit:#E8705A; --warn:#E9BC4A; --ok:#62B784; --panel:#161F33; --soft:#1F2A42; color-scheme: dark; } }
+:root[data-theme="dark"]{
+  --paper:#0E1422; --sheet:#131B2C; --ink:#D3DDF2; --line:#5E6E8C; --muted:#9AA7C0;
+  --accent:#6FA0F2; --crit:#E8705A; --warn:#E9BC4A; --ok:#62B784; --panel:#161F33; --soft:#1F2A42; color-scheme: dark; }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;display:flex;flex-direction:column}
+header{display:flex;align-items:baseline;gap:16px;padding:12px 20px;border-bottom:1px solid var(--soft);flex-wrap:wrap}
+header h1{font-family:var(--display);font-weight:700;font-size:24px;margin:0;letter-spacing:.3px;text-wrap:balance}
+header .sub{color:var(--muted);font-size:13px}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;min-width:0;background:var(--sheet)}
+#world{width:100%;height:100%;display:block;cursor:default}
+aside{width:400px;max-width:100%;background:var(--panel);border-left:1px solid var(--soft);display:flex;flex-direction:column;min-height:0}
+#panel{flex:1;overflow:auto;padding:18px 20px}
+#nav{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--soft)}
+#nav button{font-family:var(--body);font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);border-radius:6px;padding:7px 12px;cursor:pointer}
+#nav button:hover{border-color:var(--accent)}
+#nav button:focus-visible,.hot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#dots{flex:1;display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+#dots button{width:10px;height:10px;padding:0;border-radius:50%;border:1px solid var(--line);background:transparent}
+#dots button.on{background:var(--accent);border-color:var(--accent)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+h2{font-family:var(--display);font-size:30px;line-height:1.05;margin:4px 0 8px;text-wrap:balance}
+p{margin:0 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.kpi{border:1px solid var(--soft);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.meta{font-size:13px;color:var(--muted);margin-bottom:12px}
+.card{border:1px solid var(--soft);border-left:4px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.card.prio{border-left-color:var(--crit)}
+.card .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card .id{font-family:var(--mono);font-weight:600}
+.card .nm{font-weight:600}
+.fmtag{font-size:12px;color:var(--muted);margin:2px 0 6px}
+.sod{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:12px}
+.sod span{background:var(--soft);border-radius:4px;padding:2px 6px}
+.rpn{font-family:var(--mono);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--soft);border-radius:3px;margin:6px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.card.prio .bar i{background:var(--crit)}
+.pill{font-family:var(--mono);font-size:11px;border-radius:999px;padding:2px 8px;color:#fff}
+.sod .pill.z-red,.z-red{background:var(--crit);color:#fff} .sod .pill.z-yellow,.z-yellow{background:var(--warn);color:#2a2100} .sod .pill.z-green,.z-green{background:var(--ok);color:#fff}
+.act{font-size:13px;border-top:1px dashed var(--soft);padding-top:6px;margin-top:6px}
+.act b{font-family:var(--mono)}
+ul.clean{padding-left:18px;margin:6px 0 10px} ul.clean li{margin-bottom:6px}
+.hint{font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;margin-top:10px}
+/* svg */
+.part{fill:var(--sheet);stroke:var(--ink);stroke-width:3;transition:opacity .4s, stroke .3s}
+.part.fillink{fill:var(--ink)}
+.thin{stroke:var(--line);stroke-width:1.5;fill:none}
+.dash{stroke:var(--line);stroke-width:2;fill:none;stroke-dasharray:8 6}
+.lbl{font-family:var(--display);font-weight:600;font-size:26px;fill:var(--ink)}
+.lbl-s{font-family:var(--mono);font-size:15px;fill:var(--muted)}
+.hot{cursor:pointer}
+.hot:hover .part{stroke:var(--accent)}
+.dim .hot:not(.active){opacity:.25}
+.hot.active .part{stroke:var(--accent)}
+.badge circle{fill:var(--crit)} .badge text{fill:#fff;font-family:var(--mono);font-size:16px;font-weight:600}
+.grid{stroke:var(--soft);stroke-width:1}
+.ax{font-family:var(--mono);font-size:16px;fill:var(--muted)}
+.ttl{font-family:var(--display);font-size:40px;font-weight:700;fill:var(--ink)}
+@media (max-width:820px){ main{flex-direction:column} aside{width:100%;border-left:0;border-top:1px solid var(--soft);height:48%} #stage{height:52%;flex:none} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<header><h1>Floor pump FMECA explorer</h1><span class="sub">SKS Air-X-Press 8.0 · Day 5 · Quality Management Systems, Politecnico di Torino · Group A</span></header>
+<main>
+  <div id="stage"><svg id="world" viewBox="0 0 2900 1500" role="img" aria-label="Drawing of the floor pump with FMECA charts"></svg></div>
+  <aside><div id="panel" aria-live="polite"></div>
+    <div id="nav"><button id="prev" type="button" aria-label="Previous stop">← Back</button><div id="dots"></div><button id="next" type="button" aria-label="Next stop">Next →</button></div>
+  </aside>
+</main>
+<script>
+const DATA = {"subs": [{"id": 1, "name": "Valve head", "fn": "Connect to Presta, Schrader and Dunlop valves, seal and hold while pumping, release without air loss or damage.", "tc": "TC9, TC10, TC11", "vb": [540, 480, 560, 440]}, {"id": 2, "name": "Pressure gauge", "fn": "Show the tyre pressure with an error small enough to inflate to the right value.", "tc": "TC4, TC5", "vb": [320, 990, 400, 320]}, {"id": 3, "name": "Pumping unit", "fn": "Compress the air and push it to the tyre at every stroke, without backflow.", "tc": "TC1, TC2, TC3", "vb": [120, 170, 760, 1110]}, {"id": 4, "name": "Hose", "fn": "Carry the air from the barrel to the head and let the user reach the valve comfortably.", "tc": "TC8", "vb": [470, 580, 580, 720]}, {"id": 5, "name": "Handle", "fn": "Transfer the user's force to the piston safely for the whole life of the pump.", "tc": "TC3, TC12", "vb": [190, 50, 640, 440]}, {"id": 6, "name": "Base", "fn": "Keep the pump stable on the floor while the user pushes.", "tc": "TC6, TC7", "vb": [150, 1040, 720, 340]}], "causes": [{"id": "C1", "fm": "FM1", "name": "Head seal worn or hardened", "comp": "1.2", "mech": "The rubber grommet in the head loses elasticity with use and age and no longer closes around the valve.", "S": 6, "O": 6, "D": 6, "rpn": 216, "det": "Seal material specified; no seal kit sold; the user notices only by hearing the leak.", "action": "Seal in a more durable compound (e.g. HNBR); low-cost head-seal kit sold as spare part, replacement shown in the manual.", "type": "Design change + procedure", "rev": [6, 4, 4], "rpn2": 96, "zone": "yellow", "prio": true, "subs": [1]}, {"id": "C2", "fm": "FM1", "name": "Head set in the wrong configuration for the valve type", "comp": "1.4", "mech": "The MULTI VALVE head needs the user to choose the right position for Presta or Schrader; a wrong choice gives a poor seal.", "S": 6, "O": 7, "D": 5, "rpn": 210, "det": "Instructions in the manual; small embossed P/S marking on the head.", "action": "Self-adjusting head (TC9 = 0 operations); until then, large colour-coded P/S marking.", "type": "Design change + warning", "rev": [6, 4, 3], "rpn2": 72, "zone": "yellow", "prio": true, "subs": [1]}, {"id": "C3", "fm": "FM1", "name": "Air escapes when the lever is opened", "comp": "1.2, 1.3", "mech": "When the lever is released, the seal opens before the valve core has closed, so tyre air escapes (worst on Presta).", "S": 6, "O": 9, "D": 5, "rpn": 270, "det": "Prototype inflation test; air loss on release not measured.", "action": "Redesign the release sequence of the head; add the TC11 air-loss test (\u2264 50 mbar at 7 bar) to design verification.", "type": "Design change + test", "rev": [6, 5, 3], "rpn2": 90, "zone": "red", "prio": true, "subs": [1]}, {"id": "C4", "fm": "FM2", "name": "Head not pushed far enough onto the valve before locking", "comp": "1.1", "mech": "On short Presta valves the user locks the lever with the head only partly engaged; the clamp holds only the tip of the valve.", "S": 6, "O": 7, "D": 6, "rpn": 252, "det": "Instructions only; no feedback that the head is correctly seated.", "action": "Deeper head guide with an end stop and an audible/visible click when fully seated.", "type": "Design change (safety feature)", "rev": [6, 4, 3], "rpn2": 72, "zone": "yellow", "prio": true, "subs": [1]}, {"id": "C5", "fm": "FM2", "name": "Hose too short: the hose pulls on the head", "comp": "4.1", "mech": "With a short hose the user must pull the hose towards the wheel; the side pull tilts the head and unlocks it.", "S": 6, "O": 6, "D": 3, "rpn": 108, "det": "Hose length fixed and checked in the design review (TC8).", "action": "Longer hose (about 1,000 mm; Z\u00e9fal: 1,100 mm) with a 360\u00b0 swivel at the head.", "type": "Design change", "rev": [6, 4, 3], "rpn2": 72, "zone": "yellow", "prio": false, "subs": [4]}, {"id": "C6", "fm": "FM2", "name": "Lever cam worn: lower clamping force", "comp": "1.3", "mech": "The plastic cam of the thumb-lock lever wears with use, so the force holding the head on the valve drops over time.", "S": 6, "O": 5, "D": 7, "rpn": 210, "det": "No retention test after ageing; only the user notices.", "action": "Metal or glass-filled cam; head-retention test (TC10) after 5,000 lever cycles.", "type": "Design change + test", "rev": [6, 3, 4], "rpn2": 72, "zone": "yellow", "prio": true, "subs": [1]}, {"id": "C7", "fm": "FM3", "name": "Gauge out of calibration from production", "comp": "2.2", "mech": "Tolerances of the Bourdon tube and of the needle position give an error larger than declared, especially at the top of the scale.", "S": 7, "O": 4, "D": 4, "rpn": 112, "det": "Sample calibration check at the end of the line against a reference gauge.", "action": "100% check at two points (3 and 7 bar) at the end of the line.", "type": "Test", "rev": [7, 4, 2], "rpn2": 56, "zone": "yellow", "prio": false, "subs": [2]}, {"id": "C8", "fm": "FM3", "name": "Gauge damaged by a fall or a knock", "comp": "2.1, 2.3", "mech": "The gauge sits at the base, near the floor: when the pump falls or is kicked, the mechanism is knocked and the needle shifts or sticks.", "S": 7, "O": 5, "D": 8, "rpn": 280, "det": "None: the damage is not visible and the needle still moves (hidden failure).", "action": "Rubber bumper around the gauge, gauge moved higher on the barrel, zero mark that shows a shifted needle.", "type": "Design change + warning", "rev": [7, 3, 4], "rpn2": 84, "zone": "yellow", "prio": true, "subs": [2]}, {"id": "C9", "fm": "FM3", "name": "Reading error: dial too small and at floor level", "comp": "2.1", "mech": "The small dial with tight graduations is read from about 1 m above, at an angle (parallax), so the user reads the wrong value.", "S": 7, "O": 8, "D": 3, "rpn": 168, "det": "Dial size checked in the design review (TC5).", "action": "Larger dial (\u2265 63 mm) with magnifying lens, placed higher up the barrel.", "type": "Design change", "rev": [7, 4, 3], "rpn2": 84, "zone": "red", "prio": true, "subs": [2]}, {"id": "C10", "fm": "FM4", "name": "Piston seal worn or dry", "comp": "3.2", "mech": "The cup seal of the piston rubs on the barrel at every stroke; without grease it wears and lets air pass back above the piston.", "S": 4, "O": 6, "D": 6, "rpn": 144, "det": "Seal greased at assembly; no regreasing in the manual; seal not sold separately.", "action": "Self-lubricating seal; maintenance step in the manual; seal kit as spare part.", "type": "Design change + procedure", "rev": [4, 4, 4], "rpn2": 64, "zone": "green", "prio": false, "subs": [3]}, {"id": "C11", "fm": "FM4", "name": "Composite barrel deforms at high pressure", "comp": "3.1", "mech": "The plastic barrel flexes at 7\u20138 bar (as reported by reviewers); the gap around the piston seal grows and air passes back.", "S": 4, "O": 4, "D": 4, "rpn": 64, "det": "Burst test of the barrel on prototypes; deformation not measured.", "action": "Ribs or thicker wall in the lower barrel; deformation test at 8 bar.", "type": "Design change + test", "rev": [4, 2, 3], "rpn2": 24, "zone": "green", "prio": false, "subs": [3]}, {"id": "C12", "fm": "FM5", "name": "Plastic handle cracks from fatigue", "comp": "5.2", "mech": "Every stroke at high pressure bends the handle; after thousands of cycles a crack starts at the joint with the shaft.", "S": 8, "O": 5, "D": 5, "rpn": 200, "det": "Static load test of the handle on prototypes; no fatigue test.", "action": "Glass-filled material and larger radius at the joint; fatigue test (TC12, 10,000 strokes at 7 bar).", "type": "Design change + test", "rev": [8, 3, 3], "rpn2": 72, "zone": "yellow", "prio": true, "subs": [5]}, {"id": "C13", "fm": "FM5", "name": "Plastic ages and becomes brittle", "comp": "3.1, 5.1, 6.1", "mech": "Stored in a garage or on a balcony, the composite is exposed to UV light, heat and cold; it becomes brittle and breaks without warning.", "S": 8, "O": 3, "D": 8, "rpn": 192, "det": "None: no ageing test on the material.", "action": "UV-stabilised compound; accelerated ageing test (UV + cold) before the fatigue test.", "type": "Design change + test", "rev": [8, 2, 4], "rpn2": 64, "zone": "yellow", "prio": true, "subs": [3, 5, 6]}, {"id": "C14", "fm": "FM6", "name": "Side load on the valve from an unstable pump", "comp": "6.1", "mech": "A light base wobbles while pumping; the movement passes through the hose to the head, which bends the thin Presta core.", "S": 7, "O": 4, "D": 5, "rpn": 140, "det": "Stability checked in the design review only.", "action": "Wider and heavier base; longer hose with swivel (see C5).", "type": "Design change", "rev": [7, 3, 4], "rpn2": 84, "zone": "yellow", "prio": false, "subs": [6]}, {"id": "C15", "fm": "FM6", "name": "Head pulled off at an angle or with the lever still locked", "comp": "1.3", "mech": "Users unfamiliar with Presta valves twist or pull the head sideways, or remove it without opening the lever, and bend the valve.", "S": 7, "O": 5, "D": 7, "rpn": 245, "det": "Instructions only.", "action": "Lever that opens with one thumb movement; head that can only come off straight; pictogram on the head.", "type": "Design change + warning", "rev": [7, 3, 4], "rpn2": 84, "zone": "yellow", "prio": true, "subs": [1]}], "fm": {"FM1": "Air leaks at the head\u2013valve connection", "FM2": "Head comes off the valve while pumping", "FM3": "Wrong pressure value given to the user", "FM4": "Less air delivered per stroke than designed", "FM5": "Structural breakage of the pump", "FM6": "Head damages the tyre valve"}, "fmS": {"FM1": 6, "FM2": 6, "FM3": 7, "FM4": 4, "FM5": 8, "FM6": 7}, "tot": 2811, "order": ["C8", "C3", "C4", "C15", "C1", "C2", "C6", "C12", "C13", "C9", "C10", "C14", "C7", "C5", "C11"], "prio": ["C8", "C3", "C4", "C15", "C1", "C2", "C6", "C12", "C13", "C9"], "before": 2243, "after": 790};
+const NS="http://www.w3.org/2000/svg";
+const W=document.getElementById("world");
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!==undefined)e.textContent=text;(parent||W).appendChild(e);return e;}
+const byId=Object.fromEntries(DATA.causes.map(c=>[c.id,c]));
+
+// ---------- pump drawing ----------
+const pump=el("g",{id:"pump"});
+function hot(id,label){const g=el("g",{class:"hot","data-sub":id,tabindex:0,role:"button","aria-label":label},pump);return g;}
+// base
+let g=hot(6,"Base");
+el("path",{class:"part",d:"M230 1250 L470 1250 L470 1205 L300 1222 Q240 1228 230 1250Z"},g);
+el("path",{class:"part",d:"M770 1250 L530 1250 L530 1205 L700 1222 Q760 1228 770 1250Z"},g);
+el("rect",{class:"part",x:440,y:1170,width:120,height:80,rx:10},g);
+// pumping unit (barrel) with cutaway
+g=hot(3,"Pumping unit");
+el("rect",{class:"part",x:450,y:300,width:100,height:880,rx:14},g);
+el("line",{class:"dash",x1:500,y1:240,x2:500,y2:620},g);
+el("rect",{class:"dash",x:462,y:620,width:76,height:26,rx:4},g);
+el("path",{class:"dash",d:"M470 1120 L500 1150 L530 1120"},g);
+el("text",{class:"lbl-s",x:565,y:640},g,"piston + cup seal");
+el("text",{class:"lbl-s",x:565,y:1135},g,"check valve");
+// handle
+g=hot(5,"Handle");
+el("rect",{class:"part",x:490,y:200,width:20,height:110},g);
+el("path",{class:"part",d:"M280 170 Q500 140 720 170 L720 215 Q500 190 280 215Z"},g);
+// gauge
+g=hot(2,"Pressure gauge");
+el("circle",{class:"part",cx:500,cy:1150,r:72},g);
+el("circle",{class:"thin",cx:500,cy:1150,r:56},g);
+for(let a=-210;a<=30;a+=30){const r=Math.PI*a/180;el("line",{class:"thin",x1:500+50*Math.cos(r),y1:1150+50*Math.sin(r),x2:500+58*Math.cos(r),y2:1150+58*Math.sin(r)},g);}
+el("line",{class:"part",x1:500,y1:1150,x2:532,y2:1112,"stroke-linecap":"round"},g);
+el("text",{class:"lbl-s",x:478,y:1196},g,"bar");
+// hose
+g=hot(4,"Hose");
+el("path",{class:"part",d:"M550 1190 C 760 1220, 880 1050, 820 860 C 800 790, 770 760, 760 730",fill:"none","stroke-width":14,style:"fill:none"},g);
+el("path",{d:"M550 1190 C 760 1220, 880 1050, 820 860 C 800 790, 770 760, 760 730",fill:"none",stroke:"var(--sheet)","stroke-width":8},g);
+// head
+g=hot(1,"Valve head");
+el("rect",{class:"part",x:700,y:620,width:120,height:110,rx:16},g);
+el("path",{class:"part",d:"M820 640 L900 610 L912 636 L830 672Z"},g);
+el("rect",{class:"part fillink",x:740,y:600,width:40,height:24,rx:4},g);
+el("text",{class:"lbl-s",x:845,y:600},g,"lever");
+// labels
+const labs=[[1,"1 Valve head",640,780],[2,"2 Gauge",585,1250],[3,"3 Pumping unit",250,760],[4,"4 Hose",830,1180],[5,"5 Handle",250,140],[6,"6 Base",230,1300]];
+const L2=el("g",{id:"labels"},pump);
+labs.forEach(([id,t,x,y])=>el("text",{class:"lbl",x,y,"data-sub":id},L2,t));
+// priority badges per subsystem
+const pos={1:[690,610],2:[440,1080],3:[440,320],4:[880,1000],5:[290,170],6:[240,1240]};
+DATA.subs.forEach(s=>{const n=DATA.causes.filter(c=>c.prio&&c.subs.includes(s.id)).length; if(!n)return;
+  const b=el("g",{class:"badge",transform:`translate(${pos[s.id][0]},${pos[s.id][1]})`},pump); el("circle",{r:17},b); el("text",{"text-anchor":"middle",y:6},b,n);});
+el("text",{class:"ttl",x:120,y:80},W,"SKS Air-X-Press 8.0");
+el("text",{class:"ax",x:120,y:112},W,"red badge = number of priority causes in the subsystem");
+
+// ---------- Pareto (world area x 1150-2800, y 60-660) ----------
+const P=el("g",{id:"pareto"});
+const px=1200,py=120,pw=1550,ph=480;
+el("text",{class:"ttl",x:px,y:py-30},P,"Pareto chart of the RPN");
+for(let v=0;v<=300;v+=50){const y=py+ph-v/300*ph; el("line",{class:"grid",x1:px,x2:px+pw,y1:y,y2:y},P); el("text",{class:"ax",x:px-12,y:y+5,"text-anchor":"end"},P,v);}
+const bw=pw/DATA.order.length; let cum=0; const pts=[];
+DATA.order.forEach((id,i)=>{const c=byId[id]; const h=c.rpn/300*ph; const x=px+i*bw+bw*0.15;
+  el("rect",{x,y:py+ph-h,width:bw*0.7,height:h,fill:c.prio?"var(--ink)":"var(--line)",rx:3},P);
+  el("text",{class:"ax",x:x+bw*0.35,y:py+ph-h-8,"text-anchor":"middle"},P,c.rpn);
+  el("text",{class:"ax",x:x+bw*0.35,y:py+ph+26,"text-anchor":"middle"},P,id);
+  cum+=c.rpn; pts.push([x+bw*0.35,py+ph-(cum/DATA.tot)*ph]);});
+el("polyline",{points:pts.map(p=>p.join(",")).join(" "),fill:"none",stroke:"var(--accent)","stroke-width":3},P);
+pts.forEach(p=>el("circle",{cx:p[0],cy:p[1],r:5,fill:"var(--accent)"},P));
+const y80=py+ph-0.8*ph; el("line",{x1:px,x2:px+pw,y1:y80,y2:y80,stroke:"var(--crit)","stroke-dasharray":"10 8","stroke-width":2},P);
+el("text",{class:"ax",x:px+pw,y:y80-10,"text-anchor":"end",fill:"var(--crit)"},P,"80% of total RPN (blue line = cumulative share)");
+
+// ---------- Risk matrix (x 1150-2050, y 760-1460) ----------
+const M=el("g",{id:"matrix"});
+const mx=1300,my=820,cs=110; const lab=["1–2","3–4","5–6","7–8","9–10"];
+el("text",{class:"ttl",x:1200,y:my-30},M,"Risk matrix · bubble size = D");
+for(let si=1;si<=5;si++)for(let oi=1;oi<=5;oi++){const t=si+oi; const z=t>=8?"var(--crit)":t>=6?"var(--warn)":"var(--ok)";
+  el("rect",{x:mx+(oi-1)*cs,y:my+(5-si)*cs,width:cs-4,height:cs-4,fill:z,opacity:.35,rx:4},M);}
+lab.forEach((t,i)=>{el("text",{class:"ax",x:mx+i*cs+cs/2,y:my+5*cs+24,"text-anchor":"middle"},M,t); el("text",{class:"ax",x:mx-12,y:my+(4-i)*cs+cs/2+5,"text-anchor":"end"},M,t);});
+el("text",{class:"ax",x:mx+2.5*cs,y:my+5*cs+52,"text-anchor":"middle"},M,"Occurrence (O) →");
+el("text",{class:"ax",x:mx-60,y:my+2.5*cs,"text-anchor":"middle",transform:`rotate(-90 ${mx-60} ${my+2.5*cs})`},M,"Severity (S) →");
+const cellMap={}; DATA.causes.forEach(c=>{const k=Math.ceil(c.S/2)+"-"+Math.ceil(c.O/2);(cellMap[k]=cellMap[k]||[]).push(c);});
+for(const k in cellMap){const [si,oi]=k.split("-").map(Number); const arr=cellMap[k];
+  arr.forEach((c,j)=>{const x=mx+(oi-1)*cs+(j+1)*(cs-4)/(arr.length+1); const y=my+(5-si)*cs+42;
+    el("circle",{cx:x,cy:y,r:3+c.D*1.6,fill:"var(--ink)",opacity:.85},M); el("text",{class:"ax",x,y:y+42,"text-anchor":"middle"},M,c.id);});}
+
+// ---------- Before / after (x 2050-2850, y 760-1460) ----------
+const A=el("g",{id:"after"});
+const ax0=2120,ay0=820,aw=700,ah=520;
+el("text",{class:"ttl",x:ax0,y:ay0-30},A,"RPN before → after actions");
+const pr=DATA.prio.map(id=>byId[id]); const rh=ah/pr.length;
+pr.forEach((c,i)=>{const y=ay0+i*rh; el("text",{class:"ax",x:ax0,y:y+rh*0.6},A,c.id);
+  el("rect",{x:ax0+60,y:y+rh*0.15,width:c.rpn/300*(aw-120),height:rh*0.32,fill:"var(--line)",rx:2},A);
+  el("rect",{x:ax0+60,y:y+rh*0.5,width:c.rpn2/300*(aw-120),height:rh*0.32,fill:"var(--ok)",rx:2},A);
+  el("text",{class:"ax",x:ax0+70+c.rpn/300*(aw-120),y:y+rh*0.42},A,c.rpn);
+  el("text",{class:"ax",x:ax0+70+c.rpn2/300*(aw-120),y:y+rh*0.78},A,c.rpn2);});
+
+// ---------- stops ----------
+const STOPS=[{k:"overview",vb:[0,0,2900,1500]},
+  ...DATA.subs.map(s=>({k:"sub",s,vb:s.vb})),
+  {k:"pareto",vb:[1120,20,1720,700]},{k:"matrix",vb:[1150,740,960,740]},{k:"after",vb:[2060,740,820,740]}];
+const panel=document.getElementById("panel");
+function zpill(z){return `<span class="pill z-${z}">${z==="red"?"Not acceptable":z==="yellow"?"ALARP":"Acceptable"}</span>`}
+function card(c){return `<div class="card ${c.prio?"prio":""}"><div class="top"><span><span class="id">${c.id}</span> · <span class="nm">${c.name}</span></span><span class="rpn">${c.rpn}</span></div>
+<div class="fmtag">${c.fm} · ${DATA.fm[c.fm]}</div><div class="bar"><i style="width:${c.rpn/300*100}%"></i></div>
+<div class="sod"><span>S ${c.S}</span><span>O ${c.O}</span><span>D ${c.D}</span>${zpill(c.zone)}${c.prio?'<span style="background:var(--crit);color:#fff">priority</span>':""}</div>
+<p style="font-size:13px;margin:6px 0 0">${c.mech}</p>
+<div class="act"><span class="eyebrow">Detection today</span><br>${c.det}</div>
+${c.prio?`<div class="act"><span class="eyebrow">Corrective action · ${c.type}</span><br>${c.action}<br>RPN <b>${c.rpn} → ${c.rpn2}</b></div>`:""}</div>`}
+function render(i){const st=STOPS[i]; let h="";
+  if(st.k==="overview"){const red=DATA.causes.filter(c=>c.zone==="red").length;
+    h=`<div class="eyebrow">Design FMECA · top-down</div><h2>How can the pump fail, why, and what matters most?</h2>
+    <p>Click a part of the pump, or use Next, to zoom into each subsystem and its failure causes. The last three stops show the Pareto chart, the risk matrix and the effect of the corrective actions.</p>
+    <div class="kpis"><div class="kpi"><b>6</b><span>failure modes</span></div><div class="kpi"><b>15</b><span>failure causes</span></div><div class="kpi"><b>${DATA.tot.toLocaleString("en")}</b><span>total RPN</span></div>
+    <div class="kpi"><b>${DATA.prio.length}</b><span>priority causes (80% of RPN)</span></div><div class="kpi"><b>${red}</b><span>not acceptable in the matrix</span></div><div class="kpi"><b>−${Math.round((1-DATA.after/DATA.before)*100)}%</b><span>RPN after actions</span></div></div>
+    <div class="hint">RPN = S × O × D, each on a 1–10 scale (SEMATECH and course tables). Red badges on the drawing count the priority causes in each subsystem.</div>`;}
+  else if(st.k==="sub"){const s=st.s; const cs=DATA.causes.filter(c=>c.subs.includes(s.id)).sort((a,b)=>b.rpn-a.rpn);
+    h=`<div class="eyebrow">Subsystem ${s.id} of 6</div><h2>${s.name}</h2><p>${s.fn}</p><div class="meta">Related TCs (Day 3): ${s.tc} · ${cs.length} failure cause${cs.length>1?"s":""}</div>${cs.map(card).join("")}`;}
+  else if(st.k==="pareto"){const top=DATA.order.slice(0,4).map(id=>byId[id]);
+    h=`<div class="eyebrow">Risk ranking</div><h2>The first ${DATA.prio.length} causes make up 80% of the total RPN</h2>
+    <ul class="clean">${top.map(c=>`<li><b>${c.id} (${c.rpn})</b> ${c.name}</li>`).join("")}</ul>
+    <p>C8 leads because the damage is hidden (D = 8); C3 because it happens at almost every release (O = 9). The valve head alone holds 6 of the ${DATA.prio.length} priority causes.</p>
+    <div class="hint">Limit of the RPN: C2 and C6 both score 210, one as a frequent user error, the other as a hidden slow wear. That is why the risk matrix comes next.</div>`;}
+  else if(st.k==="matrix"){h=`<div class="eyebrow">Risk matrix</div><h2>Frequency and severity, with detection as bubble size</h2>
+    <ul class="clean"><li><b>Not acceptable:</b> C3 and C9, both very frequent.</li><li><b>C8</b> has the highest RPN but sits in the yellow zone: its risk comes from detectability, so its action must improve detection.</li><li><b>C10 and C11</b> only slow inflation down and are acceptable.</li><li>No cause reaches S = 9–10.</li></ul>`;}
+  else {h=`<div class="eyebrow">Team review</div><h2>Corrective actions cut the priority RPN from ${DATA.before.toLocaleString("en")} to ${DATA.after}</h2>
+    <p>The actions change the design (O) or add tests and warnings (D); the severity stays the same because the failure modes do not change.</p>
+    <ul class="clean"><li>Self-adjusting head with an end stop and a click (C2, C4)</li><li>New release sequence of the head (C3)</li><li>Protected, larger gauge placed higher (C8, C9)</li><li>Fatigue and ageing tests of the plastic (C12, C13)</li></ul>
+    <div class="hint">Revised scores are targets to confirm on prototypes. Grey bar = before, green bar = after.</div>`;}
+  panel.innerHTML=h; panel.scrollTop=0;
+  document.querySelectorAll(".hot").forEach(e=>e.classList.toggle("active",st.k==="sub"&&+e.dataset.sub===st.s.id));
+  pump.classList.toggle("dim",st.k==="sub");
+  document.querySelectorAll("#dots button").forEach((b,j)=>b.classList.toggle("on",j===i));
+  document.getElementById("prev").disabled=i===0; document.getElementById("next").disabled=i===STOPS.length-1;
+  fly(st.vb);}
+let cur=[0,0,2900,1500], anim=null;
+const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function fly(to){cancelAnimationFrame(anim); const from=cur.slice(), t0=performance.now(), dur=reduce?0:900;
+  const step=t=>{const k=dur?Math.min(1,(t-t0)/dur):1; const e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    cur=from.map((v,i)=>v+(to[i]-v)*e); W.setAttribute("viewBox",cur.join(" ")); if(k<1)anim=requestAnimationFrame(step);};
+  anim=requestAnimationFrame(step);}
+let idx=0; const go=i=>{idx=Math.max(0,Math.min(STOPS.length-1,i)); render(idx);};
+const dots=document.getElementById("dots");
+STOPS.forEach((s,i)=>{const b=document.createElement("button"); b.type="button"; b.setAttribute("aria-label","Go to stop "+(i+1)); b.onclick=()=>go(i); dots.appendChild(b);});
+document.getElementById("prev").onclick=()=>go(idx-1); document.getElementById("next").onclick=()=>go(idx+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowRight"||e.key===" "){e.preventDefault();go(idx+1);} if(e.key==="ArrowLeft")go(idx-1); if(e.key==="Escape")go(0);});
+document.querySelectorAll(".hot").forEach(e=>{const f=()=>go(+e.dataset.sub); e.addEventListener("click",f); e.addEventListener("keydown",ev=>{if(ev.key==="Enter")f();});});
+go(0);
+</script>
+</body>
+</html>
